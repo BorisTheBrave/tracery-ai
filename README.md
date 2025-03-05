@@ -1,0 +1,1 @@
+uv run .\ebnf_generator.py .\example.lark
