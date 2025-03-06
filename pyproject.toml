@@ -5,7 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "outlines>=0.2.1",
+    "accelerate>=1.4.0",
+    "outlines",
     "sentencepiece>=0.2.0",
+    "torch==2.6.0+cu126",
     "transformers>=4.49.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch" },
+]
+torchvision = [
+  { index = "pytorch" },
 ]

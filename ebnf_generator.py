@@ -36,7 +36,7 @@ def generate_from_grammar(
 
     generator = outlines.generate.cfg(model, grammar_text, sampler)
 
-    return generator(" ")
+    return generator("Test test test")
 
 DEFAULT_MODEL = "gpt2"
 
@@ -58,7 +58,7 @@ def main():
         
         # Load the model
         try:
-            model = model = outlines.models.transformers(args.model)
+            model = outlines.models.transformers(args.model, device="auto")
         except Exception as e:
             print(f"Error loading model '{args.model}': {e}")
             sys.exit(1)
