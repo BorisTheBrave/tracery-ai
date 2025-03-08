@@ -127,26 +127,37 @@ def generate_with_grammar(
     
     return results
 
-def load_grammar(grammar_path, is_tracery=False, root_rule=None):
+def load_grammar(grammar_path, root_rule=None):
     """
-    Load grammar from file, optionally converting from Tracery format.
+    Load grammar from file, automatically detecting format (GBNF or Tracery JSON).
     
     Args:
         grammar_path: Path to the grammar file
-        is_tracery: Whether the grammar is in Tracery format
-        root_rule: Root rule name for Tracery conversion
+        root_rule: Root rule name for Tracery conversion (if applicable)
         
     Returns:
         Grammar string in GBNF format
     """
+    with open(grammar_path, "r") as f:
+        content = f.read().strip()
+    
+    # Try to determine if it's JSON (Tracery) or GBNF
+    is_tracery = False
+    try:
+        # Check if it's valid JSON
+        tracery_grammar = json.loads(content)
+        # If we can parse it as JSON and it's a dictionary, assume it's Tracery
+        if isinstance(tracery_grammar, dict):
+            is_tracery = True
+    except json.JSONDecodeError:
+        # Not valid JSON, assume it's GBNF
+        is_tracery = False
+    
     if not is_tracery:
-        # Load regular GBNF grammar
-        with open(grammar_path, "r") as f:
-            return f.read()
+        # It's a GBNF grammar, return as is
+        return content
     else:
-        # Load Tracery grammar
-        with open(grammar_path, "r") as f:
-            tracery_grammar = json.load(f)
+        # It's a Tracery grammar, convert to GBNF
         
         # Convert to GBNF
         if not root_rule:
@@ -154,7 +165,7 @@ def load_grammar(grammar_path, is_tracery=False, root_rule=None):
         
         # Modify the grammar to ensure the specified root rule is used as the root
         if root_rule != "root" and "root" not in tracery_grammar:
-            # Create a temporary copy of the grammar with an origin rule
+            # Create a temporary copy of the grammar with a root rule
             temp_grammar = tracery_grammar.copy()
             temp_grammar["root"] = [f"#{root_rule}#"]
             gbnf_grammar = tracery_to_ebnf_gbnf.tracery_to_gbnf(temp_grammar)
@@ -174,13 +185,10 @@ def parse_arguments():
                         help="Path to the Llama model file")
     
     parser.add_argument("--grammar", "-g", type=str, default="example.gbnf",
-                        help="Path to the grammar file (GBNF or Tracery JSON)")
-    
-    parser.add_argument("--tracery", action="store_true",
-                        help="Treat the grammar file as Tracery JSON format")
+                        help="Path to the grammar file (GBNF or Tracery JSON, auto-detected)")
     
     parser.add_argument("--root", type=str, default=None,
-                        help="Root rule name for Tracery grammar conversion (default: 'origin')")
+                        help="Root rule name for Tracery grammar conversion (default: first rule in grammar)")
     
     parser.add_argument("--prompt", "-p", type=str, default=" ",
                         help="Input prompt for generation")
@@ -212,11 +220,8 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     
-    # Load grammar from file, with optional Tracery conversion
-    grammar = load_grammar(args.grammar, is_tracery=args.tracery, root_rule=args.root)
-    
-    if args.verbose and args.tracery:
-        print(f"Using Tracery grammar with root rule: {args.root or 'origin'}")
+    # Load grammar from file, auto-detecting format
+    grammar = load_grammar(args.grammar, root_rule=args.root)
     
     generated_texts = generate_with_grammar(
         model_path=args.model,
