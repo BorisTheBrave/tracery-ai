@@ -1,1 +1,1 @@
-uv run .\ebnf_generator.py .\example.lark
+uv run .\llama_grammar_gen.py --grammar grammars/test.json --samples 10 -t 1

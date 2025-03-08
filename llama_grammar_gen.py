@@ -85,7 +85,7 @@ def generate_with_grammar(
                         top_p=top_p,
                         repeat_penalty=repeat_penalty,
                         grammar=grammar,
-                        n_probs=beam_width,  # Get probabilities for top tokens
+                        logprobs=beam_width,  # Get probabilities for top tokens
                     )
                     
                     if verbose and _ == 0 and sample_idx == 0:
@@ -180,6 +180,26 @@ def load_grammar(grammar_path, root_rule=None):
             
         return gbnf_grammar
 
+def load_prompt(prompt_text=None, prompt_file=None):
+    """
+    Load prompt from text or file.
+    
+    Args:
+        prompt_text: Direct prompt text
+        prompt_file: Path to file containing prompt
+        
+    Returns:
+        Prompt string
+    """
+    if prompt_file:
+        try:
+            with open(prompt_file, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            raise ValueError(f"Error reading prompt file: {e}")
+    else:
+        return prompt_text or " "  # Default to space if no prompt provided
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Generate text using a Llama model with grammar constraints.")
@@ -193,8 +213,12 @@ def parse_arguments():
     parser.add_argument("--root", type=str, default=None,
                         help="Root rule name for Tracery grammar conversion (default: first rule in grammar)")
     
-    parser.add_argument("--prompt", "-p", type=str, default=" ",
+    # Prompt arguments (mutually exclusive)
+    prompt_group = parser.add_mutually_exclusive_group()
+    prompt_group.add_argument("--prompt", "-p", type=str, default=" ",
                         help="Input prompt for generation")
+    prompt_group.add_argument("--prompt-file", "-f", type=str,
+                        help="File containing the input prompt")
     
     parser.add_argument("--max-tokens", type=int, default=256,
                         help="Maximum number of tokens to generate")
@@ -223,13 +247,15 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     
-    # Configure logging based on quiet flag
     # Load grammar from file, auto-detecting format
     grammar = load_grammar(args.grammar, root_rule=args.root)
     
+    # Load prompt from text or file
+    prompt = load_prompt(prompt_text=args.prompt, prompt_file=args.prompt_file)
+    
     generated_texts = generate_with_grammar(
         model_path=args.model,
-        prompt=args.prompt,
+        prompt=prompt,
         grammar_str=grammar,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
