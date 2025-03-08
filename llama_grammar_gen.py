@@ -10,6 +10,7 @@ def generate_with_grammar(
     temperature=0.7,
     top_p=0.95,
     repeat_penalty=1.1,
+    beam_width=1,
     verbose=False
 ):
     """
@@ -23,6 +24,7 @@ def generate_with_grammar(
         temperature: Sampling temperature
         top_p: Top-p sampling parameter
         repeat_penalty: Penalty for repeating tokens
+        beam_width: Width for beam search (1 = greedy/sampling)
         verbose: Whether to print verbose output
     
     Returns:
@@ -39,19 +41,79 @@ def generate_with_grammar(
     grammar = LlamaGrammar.from_string(grammar_str)
     
     # Generate text with grammar constraints
-    output = llm.create_completion(
-        prompt,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        repeat_penalty=repeat_penalty,
-        grammar=grammar
-    )
-    
-    if verbose:
-        print(json.dumps(output, indent=2))
-    
-    return output["choices"][0]["text"]
+    if beam_width <= 1:
+        # Use standard sampling if beam_width is 1 or less
+        output = llm.create_completion(
+            prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            repeat_penalty=repeat_penalty,
+            grammar=grammar
+        )
+        
+        if verbose:
+            print(json.dumps(output, indent=2))
+        
+        return output["choices"][0]["text"]
+    else:
+        # Use beam search if beam_width > 1
+        beams = [(prompt, 0.0)]  # (text, score) pairs
+        
+        for _ in range(max_tokens):
+            candidates = []
+            
+            # For each current beam
+            for beam_text, beam_score in beams:
+                # Get next token predictions
+                output = llm.create_completion(
+                    beam_text,
+                    max_tokens=1,
+                    temperature=temperature,
+                    top_p=top_p,
+                    repeat_penalty=repeat_penalty,
+                    grammar=grammar,
+                    n_probs=beam_width  # Get probabilities for top tokens
+                )
+                
+                if verbose and _ == 0:
+                    print(f"Beam search iteration 0, candidates:")
+                    print(json.dumps(output, indent=2))
+                
+                # Get the generated token and its log probability
+                for choice in output["choices"]:
+                    if "logprobs" in choice and choice["logprobs"]["top_logprobs"]:
+                        for token, logprob in choice["logprobs"]["top_logprobs"][0].items():
+                            new_text = beam_text + token
+                            new_score = beam_score + logprob
+                            candidates.append((new_text, new_score))
+                    else:
+                        # Fallback if logprobs not available
+                        new_text = beam_text + choice["text"]
+                        candidates.append((new_text, beam_score))
+            
+            # Sort candidates by score and keep top beam_width
+            candidates.sort(key=lambda x: x[1], reverse=True)
+            beams = candidates[:beam_width]
+            
+            if verbose and _ % 10 == 0:
+                print(f"Beam search iteration {_}, top beam: {beams[0][0]}")
+            
+            # Check if all beams end with a terminal token
+            if all(llm.tokenize(beam[0])[-1] == llm.token_eos() for beam in beams):
+                break
+        
+        # Return the highest scoring beam
+        best_text = beams[0][0][len(prompt):]
+        
+        if verbose:
+            print(f"Final beams:")
+            for i, (text, score) in enumerate(beams):
+                print(f"Beam {i}, score: {score}")
+                print(text[len(prompt):])
+                print("-" * 40)
+        
+        return best_text
 
 def parse_arguments():
     """Parse command line arguments."""
@@ -78,6 +140,9 @@ def parse_arguments():
     parser.add_argument("--repeat-penalty", type=float, default=1.1,
                         help="Penalty for repeating tokens")
     
+    parser.add_argument("--beam-width", "-b", type=int, default=1,
+                        help="Beam width for beam search (1 = greedy/sampling)")
+    
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Print verbose output including full model response")
     
@@ -99,6 +164,7 @@ if __name__ == "__main__":
         temperature=args.temperature,
         top_p=args.top_p,
         repeat_penalty=args.repeat_penalty,
+        beam_width=args.beam_width,
         verbose=args.verbose
     )
     
