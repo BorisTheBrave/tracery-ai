@@ -1,3 +1,4 @@
+# Set up logging at the very beginning
 import json
 import argparse
 import os
@@ -34,11 +35,12 @@ def generate_with_grammar(
     Returns:
         List of generated texts constrained by the grammar
     """
-    # Initialize the model
+    # Initialize the model with verbose=False to suppress logging
     llm = Llama(
         model_path=model_path,
         n_ctx=2048,
-        n_gpu_layers=-1  # Use all available GPU layers
+        n_gpu_layers=-1,  # Use all available GPU layers
+        verbose=verbose   # Control verbosity directly
     )
     
     # Create grammar object
@@ -83,7 +85,7 @@ def generate_with_grammar(
                         top_p=top_p,
                         repeat_penalty=repeat_penalty,
                         grammar=grammar,
-                        n_probs=beam_width  # Get probabilities for top tokens
+                        n_probs=beam_width,  # Get probabilities for top tokens
                     )
                     
                     if verbose and _ == 0 and sample_idx == 0:
@@ -165,6 +167,7 @@ def load_grammar(grammar_path, root_rule=None):
         
         # Modify the grammar to ensure the specified root rule is used as the root
         if root_rule != "root" and "root" not in tracery_grammar:
+            assert root_rule in tracery_grammar, f"Root rule {root_rule} not found in grammar"
             # Create a temporary copy of the grammar with a root rule
             temp_grammar = tracery_grammar.copy()
             temp_grammar["root"] = [f"#{root_rule}#"]
@@ -220,6 +223,7 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     
+    # Configure logging based on quiet flag
     # Load grammar from file, auto-detecting format
     grammar = load_grammar(args.grammar, root_rule=args.root)
     
@@ -239,6 +243,6 @@ if __name__ == "__main__":
     # Print all generated samples
     for i, text in enumerate(generated_texts):
         if args.samples > 1:
-            print(f"\n--- Sample {i+1}/{args.samples} ---")
+            print(f"---")
         print(text)
     
