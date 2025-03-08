@@ -1,0 +1,5 @@
+{
+	"sentence": ["I picked up #a_an##fruit#."]
+,	"a_an": ["a","an"]
+,	"fruit": [" apple"," banana"," orange"]
+}

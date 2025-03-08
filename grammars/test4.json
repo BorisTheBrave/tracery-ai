@@ -1,0 +1,5 @@
+{
+	"sentence": ["The monster #attacks# you with its #weapon#."]
+,	"attacks": ["slashes","punches", "whips"]
+,	"weapon": ["claws","hands", "tail"]
+}

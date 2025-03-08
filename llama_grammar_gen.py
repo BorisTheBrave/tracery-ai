@@ -10,9 +10,9 @@ def generate_with_grammar(
     prompt,
     grammar_str,
     max_tokens=256,
-    temperature=0.7,
-    top_p=0.95,
-    repeat_penalty=1.1,
+    temperature=1,
+    top_p=1,
+    repeat_penalty=0,
     beam_width=1,
     samples=1,
     verbose=False
@@ -46,8 +46,6 @@ def generate_with_grammar(
     # Create grammar object
     grammar = LlamaGrammar.from_string(grammar_str)
     
-    results = []
-    
     for sample_idx in range(samples):
         if verbose and samples > 1:
             print(f"\nGenerating sample {sample_idx+1}/{samples}...")
@@ -67,7 +65,7 @@ def generate_with_grammar(
             if verbose:
                 print(json.dumps(output, indent=2))
             
-            results.append(output["choices"][0]["text"])
+            yield output["choices"][0]["text"]
         else:
             # Use beam search if beam_width > 1
             beams = [(prompt, 0.0)]  # (text, score) pairs
@@ -125,11 +123,9 @@ def generate_with_grammar(
                     print(text[len(prompt):])
                     print("-" * 40)
             
-            results.append(best_text)
-    
-    return results
+            yield best_text
 
-def load_grammar(grammar_path, root_rule=None):
+def load_grammar(grammar_path, root_rule=None, verbose=False):
     """
     Load grammar from file, automatically detecting format (GBNF or Tracery JSON).
     
@@ -175,7 +171,7 @@ def load_grammar(grammar_path, root_rule=None):
         else:
             gbnf_grammar = tracery_to_ebnf_gbnf.tracery_to_gbnf(tracery_grammar)
         
-        if os.environ.get("DEBUG"):
+        if verbose:
             print(f"Converted Tracery grammar to GBNF:\n{gbnf_grammar}")
             
         return gbnf_grammar
@@ -223,13 +219,13 @@ def parse_arguments():
     parser.add_argument("--max-tokens", type=int, default=256,
                         help="Maximum number of tokens to generate")
     
-    parser.add_argument("--temperature", "-t", type=float, default=0.7,
+    parser.add_argument("--temperature", "-t", type=float, default=1,
                         help="Sampling temperature (higher = more creative, lower = more deterministic)")
     
-    parser.add_argument("--top-p", type=float, default=0.95,
+    parser.add_argument("--top-p", type=float, default=1,
                         help="Top-p sampling parameter")
     
-    parser.add_argument("--repeat-penalty", type=float, default=1.1,
+    parser.add_argument("--repeat-penalty", type=float, default=0,
                         help="Penalty for repeating tokens")
     
     parser.add_argument("--beam-width", "-b", type=int, default=1,
@@ -248,7 +244,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     
     # Load grammar from file, auto-detecting format
-    grammar = load_grammar(args.grammar, root_rule=args.root)
+    grammar = load_grammar(args.grammar, root_rule=args.root, verbose=args.verbose)
     
     # Load prompt from text or file
     prompt = load_prompt(prompt_text=args.prompt, prompt_file=args.prompt_file)
@@ -268,7 +264,7 @@ if __name__ == "__main__":
     
     # Print all generated samples
     for i, text in enumerate(generated_texts):
-        if args.samples > 1:
-            print(f"---")
+        # if args.samples > 1:
+            # print(f"---")
         print(text)
     
