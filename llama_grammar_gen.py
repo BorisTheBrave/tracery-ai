@@ -1,4 +1,5 @@
 import json
+import argparse
 from llama_cpp import Llama, LlamaGrammar
 
 def generate_with_grammar(
@@ -52,20 +53,53 @@ def generate_with_grammar(
     
     return output["choices"][0]["text"]
 
-grammar = open("example.gbnf", "r").read()
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="Generate text using a Llama model with grammar constraints.")
+    
+    parser.add_argument("--model", "-m", type=str, default="models/qwen2-0_5b-instruct-q8_0.gguf",
+                        help="Path to the Llama model file")
+    
+    parser.add_argument("--grammar", "-g", type=str, default="example.gbnf",
+                        help="Path to the grammar file in GBNF format")
+    
+    parser.add_argument("--prompt", "-p", type=str, default=" ",
+                        help="Input prompt for generation")
+    
+    parser.add_argument("--max-tokens", type=int, default=256,
+                        help="Maximum number of tokens to generate")
+    
+    parser.add_argument("--temperature", "-t", type=float, default=0.7,
+                        help="Sampling temperature (higher = more creative, lower = more deterministic)")
+    
+    parser.add_argument("--top-p", type=float, default=0.95,
+                        help="Top-p sampling parameter")
+    
+    parser.add_argument("--repeat-penalty", type=float, default=1.1,
+                        help="Penalty for repeating tokens")
+    
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Print verbose output including full model response")
+    
+    return parser.parse_args()
 
 # Example: Generate a JSON response
 if __name__ == "__main__":
-    # Replace with your model path
-    MODEL_PATH = "models/qwen2-0_5b-instruct-q8_0.gguf"
+    args = parse_arguments()
     
-    prompt = " "
+    # Load grammar from file
+    with open(args.grammar, "r") as f:
+        grammar = f.read()
     
     generated_text = generate_with_grammar(
-        model_path=MODEL_PATH,
-        prompt=prompt,
+        model_path=args.model,
+        prompt=args.prompt,
         grammar_str=grammar,
-        verbose=False
+        max_tokens=args.max_tokens,
+        temperature=args.temperature,
+        top_p=args.top_p,
+        repeat_penalty=args.repeat_penalty,
+        verbose=args.verbose
     )
     
     print(generated_text)
