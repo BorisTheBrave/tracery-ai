@@ -1,6 +1,8 @@
 import json
 import argparse
+import os
 from llama_cpp import Llama, LlamaGrammar
+import tracery_to_ebnf_gbnf
 
 def generate_with_grammar(
     model_path,
@@ -125,6 +127,45 @@ def generate_with_grammar(
     
     return results
 
+def load_grammar(grammar_path, is_tracery=False, root_rule=None):
+    """
+    Load grammar from file, optionally converting from Tracery format.
+    
+    Args:
+        grammar_path: Path to the grammar file
+        is_tracery: Whether the grammar is in Tracery format
+        root_rule: Root rule name for Tracery conversion
+        
+    Returns:
+        Grammar string in GBNF format
+    """
+    if not is_tracery:
+        # Load regular GBNF grammar
+        with open(grammar_path, "r") as f:
+            return f.read()
+    else:
+        # Load Tracery grammar
+        with open(grammar_path, "r") as f:
+            tracery_grammar = json.load(f)
+        
+        # Convert to GBNF
+        if not root_rule:
+            root_rule = next(iter(tracery_grammar))
+        
+        # Modify the grammar to ensure the specified root rule is used as the root
+        if root_rule != "root" and "root" not in tracery_grammar:
+            # Create a temporary copy of the grammar with an origin rule
+            temp_grammar = tracery_grammar.copy()
+            temp_grammar["root"] = [f"#{root_rule}#"]
+            gbnf_grammar = tracery_to_ebnf_gbnf.tracery_to_gbnf(temp_grammar)
+        else:
+            gbnf_grammar = tracery_to_ebnf_gbnf.tracery_to_gbnf(tracery_grammar)
+        
+        if os.environ.get("DEBUG"):
+            print(f"Converted Tracery grammar to GBNF:\n{gbnf_grammar}")
+            
+        return gbnf_grammar
+
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="Generate text using a Llama model with grammar constraints.")
@@ -133,7 +174,13 @@ def parse_arguments():
                         help="Path to the Llama model file")
     
     parser.add_argument("--grammar", "-g", type=str, default="example.gbnf",
-                        help="Path to the grammar file in GBNF format")
+                        help="Path to the grammar file (GBNF or Tracery JSON)")
+    
+    parser.add_argument("--tracery", action="store_true",
+                        help="Treat the grammar file as Tracery JSON format")
+    
+    parser.add_argument("--root", type=str, default=None,
+                        help="Root rule name for Tracery grammar conversion (default: 'origin')")
     
     parser.add_argument("--prompt", "-p", type=str, default=" ",
                         help="Input prompt for generation")
@@ -165,9 +212,11 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     
-    # Load grammar from file
-    with open(args.grammar, "r") as f:
-        grammar = f.read()
+    # Load grammar from file, with optional Tracery conversion
+    grammar = load_grammar(args.grammar, is_tracery=args.tracery, root_rule=args.root)
+    
+    if args.verbose and args.tracery:
+        print(f"Using Tracery grammar with root rule: {args.root or 'origin'}")
     
     generated_texts = generate_with_grammar(
         model_path=args.model,
