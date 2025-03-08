@@ -1,5 +1,5 @@
 {
-	"sentence": ["#heshe# went to #hisher# house."]
-,	"heshe": ["he","she"]
-,	"hisher": ["his","her"]
+	"sentence": ["#he_she# went to #his_her# house."]
+,	"he_she": ["he","she"]
+,	"his_her": ["his","her"]
 }

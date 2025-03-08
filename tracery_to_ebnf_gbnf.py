@@ -29,12 +29,13 @@ class LiteralToken(Token):
 
 class SymbolToken(Token):
     """A symbol reference token (#symbol#)."""
-    def __init__(self, symbol: str):
+    def __init__(self, symbol: str, sanitized_symbol: str):
         self.symbol = symbol
+        self.sanitized_symbol = sanitized_symbol
     
     def to_gbnf(self) -> str:
         """Convert to GBNF format."""
-        return self.symbol
+        return self.sanitized_symbol
 
 
 class VariableToken(Token):
@@ -51,13 +52,34 @@ class VariableToken(Token):
         raise NotImplementedError("Variable tokens cannot be converted to GBNF")
 
 
-def parse_rule(rule: str, grammar_keys: List[str]) -> List[Token]:
+def sanitize_rule_name(name: str) -> str:
+    """
+    Sanitize a rule name for GBNF by removing non-alphanumeric characters.
+    
+    Args:
+        name: The original rule name
+        
+    Returns:
+        Sanitized rule name with only alphanumeric characters and underscores
+    """
+    # Replace non-alphanumeric characters with underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '', name)
+    
+    # Ensure the name starts with a letter or underscore (GBNF requirement)
+    if sanitized and sanitized[0].isdigit():
+        sanitized = 'x' + sanitized
+        
+    return sanitized
+
+
+def parse_rule(rule: str, grammar_keys: List[str], symbol_map: Dict[str, str]) -> List[Token]:
     """
     Parse a Tracery rule into a list of tokens.
     
     Args:
         rule: The Tracery rule to parse
         grammar_keys: List of valid symbol names in the grammar
+        symbol_map: Mapping from original symbol names to sanitized names
         
     Returns:
         List of Token objects
@@ -96,7 +118,8 @@ def parse_rule(rule: str, grammar_keys: List[str]) -> List[Token]:
                 raise ValueError(f"Variable assignment found: #{symbol_name}#")
             
             if symbol_name in grammar_keys:
-                tokens.append(SymbolToken(symbol_name))
+                sanitized_name = symbol_map.get(symbol_name, symbol_name)
+                tokens.append(SymbolToken(symbol_name, sanitized_name))
             else:
                 # Not a valid symbol, treat as literal
                 tokens.append(LiteralToken(f"#{symbol_name}#"))
@@ -129,6 +152,39 @@ def convert_rule(tokens: List[Token]) -> str:
     return " ".join(formatted_tokens)
 
 
+def create_symbol_map(grammar: Dict[str, List[str]]) -> Dict[str, str]:
+    """
+    Create a mapping from original symbol names to sanitized GBNF-compatible names.
+    Handles potential name clashes by adding numeric suffixes.
+    
+    Args:
+        grammar: The Tracery grammar
+        
+    Returns:
+        Dictionary mapping original names to sanitized names
+    """
+    symbol_map = {}
+    sanitized_names = set()
+    
+    for symbol in grammar.keys():
+        base_sanitized = sanitize_rule_name(symbol)
+        
+        # Handle potential name clashes
+        if base_sanitized in sanitized_names:
+            # Add numeric suffix until we find a unique name
+            suffix = 1
+            while f"{base_sanitized}_{suffix}" in sanitized_names:
+                suffix += 1
+            sanitized_name = f"{base_sanitized}_{suffix}"
+        else:
+            sanitized_name = base_sanitized
+        
+        sanitized_names.add(sanitized_name)
+        symbol_map[symbol] = sanitized_name
+    
+    return symbol_map
+
+
 def tracery_to_gbnf(grammar: Dict[str, List[str]]) -> str:
     """
     Convert a Tracery grammar to GBNF notation.
@@ -136,15 +192,26 @@ def tracery_to_gbnf(grammar: Dict[str, List[str]]) -> str:
     gbnf = []
     grammar_keys = list(grammar.keys())
     
+    # Create mapping from original symbol names to sanitized names
+    symbol_map = create_symbol_map(grammar)
+    
+    # Add a comment explaining the symbol mapping
+    gbnf.append("# Symbol mapping from Tracery to GBNF:")
+    for original, sanitized in symbol_map.items():
+        if original != sanitized:
+            gbnf.append(f"# {original} -> {sanitized}")
+    gbnf.append("")
+    
     # Add a root rule if "origin" exists in the grammar
     if "origin" in grammar_keys:
-        gbnf.append("root ::= origin")
+        origin_rule = symbol_map.get("origin", "origin")
+        gbnf.append(f"root ::= {origin_rule}")
         gbnf.append("")
     
     # Process each symbol in the grammar
     for symbol, expansions in grammar.items():
-        # Format the rule name
-        rule_name = symbol
+        # Get the sanitized rule name
+        rule_name = symbol_map.get(symbol, symbol)
         
         # Format the expansions
         formatted_expansions = []
@@ -152,7 +219,7 @@ def tracery_to_gbnf(grammar: Dict[str, List[str]]) -> str:
             if isinstance(expansion, str):
                 try:
                     # Parse the rule into tokens
-                    tokens = parse_rule(expansion, grammar_keys)
+                    tokens = parse_rule(expansion, grammar_keys, symbol_map)
                     
                     # Convert tokens to GBNF
                     formatted_expansion = convert_rule(tokens)
